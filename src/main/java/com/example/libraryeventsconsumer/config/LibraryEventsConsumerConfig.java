@@ -11,6 +11,8 @@ import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.util.backoff.FixedBackOff;
 
 @Configuration
 @EnableKafka
@@ -18,6 +20,12 @@ public class LibraryEventsConsumerConfig {
 
     @Autowired
     KafkaProperties kafkaProperties;
+
+    public DefaultErrorHandler errorHandler() {
+        FixedBackOff fixedBackOff = new FixedBackOff(1000L, 2);
+
+        return new DefaultErrorHandler(fixedBackOff);
+    }
 
     @Bean
     @ConditionalOnMissingBean(name = "kafkaListenerContainerFactory")
@@ -29,6 +37,7 @@ public class LibraryEventsConsumerConfig {
                 .getIfAvailable(() -> new DefaultKafkaConsumerFactory<>(this.kafkaProperties.buildConsumerProperties())));
 
         factory.setConcurrency(3);
+        factory.setCommonErrorHandler(errorHandler());
        // factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
 
         return factory;
