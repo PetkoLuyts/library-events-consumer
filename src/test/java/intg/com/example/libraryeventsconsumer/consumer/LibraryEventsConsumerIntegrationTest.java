@@ -114,4 +114,16 @@ public class LibraryEventsConsumerIntegrationTest {
         LibraryEvent persistedLibraryEvent = libraryEventsRepository.findById(libraryEvent.getLibraryEventId()).get();
         assertEquals("Kafka Using Spring Boot Practical Course", persistedLibraryEvent.getBook().getBookName());
     }
+
+    @Test
+    void publishUpdateLibraryEventWithNullId() throws JsonProcessingException, ExecutionException, InterruptedException {
+        String json = "{\"libraryEventId\":null,\"libraryEventType\":\"UPDATE\",\"book\":{\"bookId\":123,\"bookName\":\"Kafka Spring\",\"bookAuthor\":\"Petko\"}}";
+        kafkaTemplate.sendDefault(json).get();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        latch.await(5, TimeUnit.SECONDS);
+
+        verify(libraryEventsConsumerSpy, times(10)).onMessage(isA(ConsumerRecord.class));
+        verify(libraryEventsServiceSpy, times(10)).processLibraryEvent(isA(ConsumerRecord.class));
+    }
 }
