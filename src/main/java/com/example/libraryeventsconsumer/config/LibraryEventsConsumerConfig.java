@@ -1,5 +1,6 @@
 package com.example.libraryeventsconsumer.config;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -16,6 +17,7 @@ import org.springframework.util.backoff.FixedBackOff;
 
 @Configuration
 @EnableKafka
+@Slf4j
 public class LibraryEventsConsumerConfig {
 
     @Autowired
@@ -24,7 +26,14 @@ public class LibraryEventsConsumerConfig {
     public DefaultErrorHandler errorHandler() {
         FixedBackOff fixedBackOff = new FixedBackOff(1000L, 2);
 
-        return new DefaultErrorHandler(fixedBackOff);
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(fixedBackOff);
+
+        errorHandler.setRetryListeners((record, ex, deliveryAttempt) -> {
+            log.info("Failed record in retry listener, exception : {}, " +
+                    "deliveryAttempt : {}", ex.getMessage(), deliveryAttempt);
+        });
+
+        return errorHandler;
     }
 
     @Bean
