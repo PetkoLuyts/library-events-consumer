@@ -1,6 +1,8 @@
 package com.example.libraryeventsconsumer.config;
 
+import com.example.libraryeventsconsumer.service.FailureService;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +18,7 @@ import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.ConsumerRecordRecoverer;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
@@ -28,10 +31,16 @@ import java.util.List;
 @Slf4j
 public class LibraryEventsConsumerConfig {
 
+    public static final String RETRY = "RETRY";
+    public static final String DEAD = "DEAD";
+
     @Autowired
     KafkaTemplate kafkaTemplate;
     @Autowired
     KafkaProperties kafkaProperties;
+
+    @Autowired
+    FailureService failureService;
 
     @Value("${topics.retry}")
     private String retryTopic;
@@ -56,6 +65,16 @@ public class LibraryEventsConsumerConfig {
         return recoverer;
     }
 
+    ConsumerRecordRecoverer consumerRecordRecoverer = (consumerRecord, e) -> {
+        ConsumerRecord<Integer, String> record = (ConsumerRecord<Integer, String>) consumerRecord;
+
+        if (e.getCause() instanceof RecoverableDataAccessException) {
+            failureService.saveFailedRecord(record, e, RETRY);
+        } else {
+            failureService.saveFailedRecord(record, e, DEAD);
+        }
+    };
+
     public DefaultErrorHandler errorHandler() {
 
         List<Class<IllegalArgumentException>> exceptionsToIgnoreList = List.of(IllegalArgumentException.class);
@@ -68,7 +87,8 @@ public class LibraryEventsConsumerConfig {
         expBackOff.setMaxInterval(2_000L);
 
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(
-                publishingRecoverer(),
+                //publishingRecoverer(),
+                consumerRecordRecoverer,
                 // fixedBackOff
                 expBackOff
         );
